@@ -57,6 +57,8 @@ class WindowEvents(mglw.WindowConfig):
         self.roi=(0,0,0,0)
         self.circles=False
         self.ruler=True
+        self.colored_ranges=[[0,200],[0,200],[0,200],[0,200],[0,200]]
+        self.colored_ranges_enabled=[True]*len(self.colored_ranges)
         pygui.load_style("./themes/json/material_flat.json")
         ## hack over missing values in imgui.get_io()
         self._io_state={'key_shift':False,'key_ctrl':False,'key_alt':False,'mouse_delta':(0,0)}
@@ -87,12 +89,12 @@ class WindowEvents(mglw.WindowConfig):
                     print("Roi",self.roi)
                 imgui.end_tab_item()
             if imgui.begin_tab_item("clickable")[0]:
-                clicked,(x,y)=pygui.image_clickable(ImTextureRef(self.img.glo),ar=ar)
+                clicked,(x,y)=pygui.image_clickable(ImTextureRef(self.img.glo),ar=ar, w_max=250, h_max=250)
                 if clicked:
                     print("Click",x,y)
                 imgui.end_tab_item()
             if imgui.begin_tab_item("expandable")[0]:
-                pygui.image_expandable(ImTextureRef(self.img.glo),ar=ar)
+                pygui.image_expandable(ImTextureRef(self.img.glo),ar=ar, w_max=250, h_max=250)
                 imgui.end_tab_item()
             if imgui.begin_tab_item("draggable")[0]:
                 dragged,(x,y,w)=pygui.image_dragable(ImTextureRef(self.img.glo),ar=ar)
@@ -177,8 +179,21 @@ class WindowEvents(mglw.WindowConfig):
         changed,self.pos_fract=pygui.time_line("pos_fract",self.pos_fract,self.keyframes_fract,*self.range, align=fractions.Fraction(1001,30000), circles=self.circles)
         if changed:
             print(self.pos_fract)
-        changed,self.range=pygui.pan_and_zoom(self.range,factor=fractions.Fraction(4,3), pan=self._io_state['key_shift'])
+        changed,self.range=pygui.pan_and_zoom(self.range,factor=fractions.Fraction(4,3),bounds=(0,200),pan=self._io_state['key_shift'])
         
+        imgui.new_line()
+        imgui.new_line()
+        pygui.ruler("dummy_ruler",0,200)
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos()[1]+40)
+        imgui.push_id("colored_ranges_id")
+        for e, color in enumerate([[255,0,0,255],[0,255,0,255],[0,0,255,255],[255,255,0,255],[255,0,255,255]]):    
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos()[1]-8)
+            changed, self.colored_ranges[e] = pygui.range_float2(f"range{e}",self.colored_ranges[e],0,200,
+                                                                 circles=self.circles, color=color, height_px=6,
+                                                                 active=self.colored_ranges_enabled[e])
+            if imgui.is_item_clicked():
+                self.colored_ranges_enabled=[_==e for _ in range(len(self.colored_ranges_enabled))]
+        imgui.pop_id()
         imgui.pop_id()
         imgui.end()
         # if BUNDLEAPI:

@@ -264,12 +264,13 @@ def pygui_ruler(label,lo,hi,maxticks=10,minor_cnt=4):
         draw_list.add_line(*Vec2(x,top),*Vec2(x,top+height),textcolor)
         draw_list.add_text(*Vec2(x+3,top+height//2),textcolor,f"{t:g}")
 
-def pygui_pan_and_zoom(range,factor,pan=False):
+def pygui_pan_and_zoom(range,factor,bounds=None,pan=False):
         """Handles interaction with pygui_time_line (and potentially pygui_range_float2) to implement pan and zoom with mouse wheel.
 
         Args:
             range: current range (lo,hi). Used for both panning and zooming.
             factor: zoom factor. >1 to zoom in, <1 to zoom out accespts fractions.
+            bounds: optional (lo,hi) limits for range. If specified, it will prevent zooming or panning beyond these limits.
             pan: if True, mouse wheel will pan instead of zoom (usually imgui.get_io().key_shift|key_ctrl).
         Returns:
             tuple (changed, new_range) where changed is True if range is changed, and new_range is the potentially updated range.
@@ -278,9 +279,16 @@ def pygui_pan_and_zoom(range,factor,pan=False):
             call immediately after pygui_time_line or pygui_range_float2, and pass the same range. If user is hovering the widget and scrolls mouse wheel, the range will be updated accordingly. If shift is held, it will pan instead of zoom.
         """
         if imgui.is_item_hovered() and imgui.get_io().mouse_wheel!=0:
-            if pan: ## needs hack to work
-                range=(range[0]+2*imgui.get_io().mouse_wheel,
-                            range[1]+2*imgui.get_io().mouse_wheel)
+            if pan:
+                span=range[1]-range[0] ## current span
+                if bounds:
+                    v_min, v_max = bounds
+                    if imgui.get_io().mouse_wheel>0:
+                        span=min(span*factor/5, v_max-range[1])
+                    else:
+                        span=min(span*factor/5, range[0]-v_min)   
+                range=(range[0]+span*imgui.get_io().mouse_wheel,
+                            range[1]+span*imgui.get_io().mouse_wheel)
             else:
                 padx=imgui.get_style().frame_padding.x
                 _pos=fractions.Fraction(int(imgui.get_mouse_pos().x-padx-imgui.get_item_rect_min().x),int(imgui.get_item_rect_max().x-imgui.get_item_rect_min().x+2*padx))
@@ -288,11 +296,14 @@ def pygui_pan_and_zoom(range,factor,pan=False):
                 increment= factor if imgui.get_io().mouse_wheel<0 else 1/factor
                 range=(_pos-(_pos-range[0])*increment,
                             _pos+(range[1]-_pos)*increment )
+                range=(clip(range[0],bounds[0],bounds[1]) if bounds else range[0],
+                       clip(range[1],bounds[0],bounds[1]) if bounds else range[1])   
+
             return True,range
         return False,range
 
 
-def pygui_time_line(label,pos,keyframes,lo,hi,height_px=6,rightbtn=2, align=0,circles=True):
+def pygui_time_line(label,pos,keyframes,lo,hi,height_px=6,rightbtn=2, align=0,circles=True, color=None):
     """Displays a time_line widget. User can select position, set/remove jump to key positions (using specified button)
 
     clicking with rightbtn on cursor adds a key position.
@@ -318,12 +329,12 @@ def pygui_time_line(label,pos,keyframes,lo,hi,height_px=6,rightbtn=2, align=0,ci
     if BUNDLEAPI:
         barcolor=imgui.get_color_u32(imgui.Col_.frame_bg)
         ## barcolor=imgui.get_color_u32(imgui.ImVec4(1.0,0.0,0.0,1.0))
-        handlecolor=imgui.get_color_u32(imgui.Col_.slider_grab)
+        handlecolor=imgui.get_color_u32(color if color else imgui.Col_.slider_grab)
         wori=get_window_pos()
         wsize=pygui_get_content_region_avail() #imgui.get_content_region_avail()
     else:
         barcolor=imgui.get_color_u32_rgba(*style.colors[imgui.COLOR_FRAME_BACKGROUND])
-        handlecolor=imgui.get_color_u32_rgba(*style.colors[imgui.COLOR_SLIDER_GRAB])
+        handlecolor=imgui.get_color_u32_rgba(*(color if color else style.colors[imgui.COLOR_SLIDER_GRAB]))
         wori=get_window_pos()                    ## screen position of window top left
         wsize = pygui_get_content_region_avail()            #imgui.get_window_content_region_max()       ## actual size of window content (after padding substraction)
     wcursor=imgui.get_cursor_pos()                          ## window coordinates of cursor (top left of next widget,including padding)
@@ -375,8 +386,8 @@ def pygui_time_line(label,pos,keyframes,lo,hi,height_px=6,rightbtn=2, align=0,ci
             draw_list.add_circle(*Vec2(x,y),radius,handlecolor,num_segments=16 if circles else 4)
     return changed,pos
 
-@static_vars(_current=None)
-def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=False):
+@static_vars(_current=None, _drag=None)
+def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=None,active=True):
     """Displays a range widget
 
     Args:
@@ -385,6 +396,8 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=False):
         v_min,v_max: min and max values that the range can take
         height_px: controls size of handle(s) and span
         circles: used circles (True) or triangles (False)
+        color: color of handles and span. if None, default slider grab color is used.
+        active: if False, the widget is displayed but not interactive. This is useful to display multiple range_float2 with different colors, and only one of them is active at a time (eg to display multiple colored ranges on the same ruler, and only one of them can be edited at a time)
     Returns:
         tuple (changed, (lo,hi))
 
@@ -398,12 +411,12 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=False):
     style=imgui.get_style()
     if BUNDLEAPI:
         barcolor=imgui.get_color_u32(imgui.Col_.frame_bg)
-        handlecolor=imgui.get_color_u32(imgui.Col_.slider_grab)
+        handlecolor=imgui.get_color_u32(color if color else imgui.Col_.slider_grab)
         wori=get_window_pos()
         wsize=pygui_get_content_region_avail() #imgui.get_content_region_avail()
     else:
         barcolor=imgui.get_color_u32_rgba(*style.colors[imgui.COLOR_FRAME_BACKGROUND])
-        handlecolor=imgui.get_color_u32_rgba(*style.colors[imgui.COLOR_SLIDER_GRAB])
+        handlecolor=imgui.get_color_u32_rgba(*(color if color else style.colors[imgui.COLOR_SLIDER_GRAB]))
         wori=get_window_pos()                    ## screen position of window top left
         wsize = pygui_get_content_region_avail()            ## actual size of window content (after padding substraction)
     wcursor=imgui.get_cursor_pos()                          ## window coordinates of cursor (top left of next widget,including padding)
@@ -438,6 +451,8 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=False):
     
     centerhandle=[lohandle[0], top+height//2-height_px//2, hihandle[0],top+height//2+height_px//2]
     draw_list.add_rect_filled(*Vec2(centerhandle[0],centerhandle[1]+0),*Vec2(centerhandle[2],centerhandle[3]-0),handlecolor)
+    if not active:
+        return False,bounds
     if imgui.is_item_clicked():
         if ptinrect(*imgui.get_mouse_pos(),*lohandle):
             pygui_range_float2._current=0
@@ -769,36 +784,64 @@ def pygui_dir_open_button(label,path):
     if f:=pygui_popup_dir_open_selector(label,path):
         return f
     
-def pygui_image_clickable(texid,ar=1.0,width=None):
+def pygui_image_clickable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     """Displays image with specific aspect ratio and reports mouse clicks.
 
     Args:
         texid: id of texture
         ar: aspect ratio for image
         center: center the image horizontally (0b01) and/or vertically (0b10)
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.
     Returns:
         tuple (changed, (x,y)) coordinates are relative to width and height (0-1.0 bound)
     """
-    width=width if width else pygui_get_content_region_avail()[0]
-    pygui_image(texid, width, width*ar, uv0=(0,0),uv1=(1,1))
+    # width=width if width else pygui_get_content_region_avail()[0]
+    # pygui_image(texid, width, width*ar, uv0=(0,0),uv1=(1,1))
+    # lt=imgui.get_item_rect_min()
+    # rb=imgui.get_item_rect_max()
+    # xy=imgui.get_mouse_pos()
+    # if pygui_is_window_focused() and click(0,*lt,*rb):
+    #     return True,pct4(*xy,*lt,*rb)
+    # return False,(None,None)
+    width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
+    if height/width>ar:
+        height=width*ar
+    else:
+        width=height/ar
+    ox,oy=imgui.get_cursor_pos()
+    if center & 0b01:
+        ox+=(pygui_get_content_region_avail().x-width) * 0.5
+    if center &0b10:
+        oy+=(pygui_get_content_region_avail().y-height) * 0.5
+    imgui.set_cursor_pos((ox,oy))
+    pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
+    imgui.set_cursor_pos((ox,oy))
+    imgui.invisible_button(f"img_clic_{texid}",*Vec2(width,height))
     lt=imgui.get_item_rect_min()
     rb=imgui.get_item_rect_max()
-    xy=imgui.get_mouse_pos()
     if pygui_is_window_focused() and click(0,*lt,*rb):
-        return True,pct4(*xy,*lt,*rb)
+        return True,pct4(*imgui.get_mouse_pos(),*lt,*rb)
     return False,(None,None)
 
-def pygui_image_expandable(texid,ar=1.0,center=True):
+def pygui_image_expandable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     """Displays image with specific aspect ratio and optionnaly centered in window.
 
     Args:
         texid: id of texture
         ar: aspect ratio for image
         center: center the image horizontally (0b01) and/or vertically (0b10)
-    Returns:
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.     Returns:
         None
     """
     width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
     if height/width>ar:
         height=width*ar
     else:
@@ -812,19 +855,24 @@ def pygui_image_expandable(texid,ar=1.0,center=True):
     pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
 
 @static_vars(_x=0,_y=0)
-def pygui_image_dragable(texid,ar=1.0,center=True):
+def pygui_image_dragable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     """Displays image and reports the amound of drag when a user drags over the image.
 
     Args:
         texid: id of texture
         ar: aspect ratio for image
         center: center the image horizontally (0b01) and/or vertically (0b10)
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.    
     Returns:
         tuple(changed,(x,y,w)) where w is mouse wheel delta. coordinates are relative to width and height (0-1.0 bound)
     
     notes (1): old implementation uses static var, which may prevent correct operations if the widget is used several times in render loop
     """
     width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
     if height/width>ar:
         height=width*ar
     else:
@@ -837,7 +885,7 @@ def pygui_image_dragable(texid,ar=1.0,center=True):
     imgui.set_cursor_pos((ox,oy))
     pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
     imgui.set_cursor_pos((ox,oy))
-    imgui.invisible_button("pygui_image_dragable",*Vec2(width,height))
+    imgui.invisible_button(f"img_drag_{texid}",*Vec2(width,height))
     lt=imgui.get_item_rect_min()
     rb=imgui.get_item_rect_max()
 
@@ -869,7 +917,7 @@ def pygui_image_dragable(texid,ar=1.0,center=True):
     return False,(0,0,0)
 
 @static_vars(_dragging=False)
-def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,1.0],rounding=0.0, thickness=2.0):
+def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,1.0],rounding=0.0, thickness=2.0, w_max=None, h_max=None):
     """Displays image where user can select a rectangular ROI with mouse.
 
     Args:
@@ -879,6 +927,7 @@ def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,
         center: center the image horizontally (0b01) and/or vertically (0b10)
         roi_ar: forced aspect ratio for roi selection
         color, rounding, thickness: color, corner rounding and line thickness for the selection rect
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.    
     Returns:
         tuple(changed,(l,t,r,b))
 
@@ -899,6 +948,10 @@ def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,
         return([round(l+x*(r-l)),round(t+y*(b-t))])
     
     width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
     if height/width>ar:
         height=width*ar
     else:
