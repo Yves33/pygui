@@ -30,7 +30,7 @@ else:
     pygui_push_font=lambda fnt,sz:imgui.push_font(fnt)
     get_window_pos=imgui.get_window_position
 
-import math, json, pathlib,fractions
+import math, json, pathlib, fractions, itertools
 from collections.abc import Iterable
 
 ## some colors are redundant...namely those starting with COLOR_EDIT
@@ -135,10 +135,13 @@ def pygui_load_style(fname,**kwargs):
             else:
                 style.colors[v]=imgui.Vec4(*tuple(jsonstyle['colors'][k]))
 
+def pixels4(x,y,l,t,r,b): ## equivalent to pct4
+    return([round(l+x*(r-l)),round(t+y*(b-t))])
+
 def clip(x,lo,hi):
     return max(lo,min(x,hi))
 
-def pct2(x, lo,hi):
+def pct2(x,lo,hi):
     return (x-lo)/(hi-lo)
     
 def pct4(x,y,l,t,r,b):
@@ -146,9 +149,9 @@ def pct4(x,y,l,t,r,b):
 
 def ptinrect(x,y,l,t,r,b=None):
     if b is None:  ## consider r as circle radius, and l,t as center
-        return l-r<x<l+r and t-r<y<t+r
+        return l-r<=x<=l+r and t-r<=y<=t+r
     else:
-        return (l<x<r if l<r else r<x<l) and (t<y<b if t<b else b<y<t)
+        return (l<=x<=r if l<r else r<=x<=l) and (t<=y<=b if t<b else b<=y<=t)
 
 def click_pct(btn,l,t,r,b):
     if imgui.is_mouse_clicked(btn) or imgui.is_mouse_dragging(btn):
@@ -165,15 +168,18 @@ def click(btn,l,t,r=5,b=None):
         return ptinrect(*imgui.get_mouse_pos(),l,t,r,b) ## actually should check for true distance
     return None
 
-def drag(btn,l,t,r=5,b=None):
-    if b is None: ## b is none consider radius. compute rectangle
-        l-=r
-        t-=r
-        b=t+r
-        r=l+r
-    if imgui.is_mouse_dragging(btn):
-        return ptinrect(*imgui.get_mouse_pos(),l,t,r,b) ## actually should check for true distance
-    return None
+# def drag(btn,l,t,r=5,b=None):
+#     if b is None: ## b is none consider radius. compute rectangle
+#         l-=r
+#         t-=r
+#         b=t+r
+#         r=l+r
+#     if imgui.is_mouse_dragging(btn):
+#         return ptinrect(*imgui.get_mouse_pos(),l,t,r,b) ## actually should check for true distance
+#     return None
+
+def expand(l,t,r,b,dx,dy):
+    return l-dx,t-dy,r+dx,b+dy
 
 def make_ticks(lo, hi, maxticks, minor_cnt=4):
     range_val = hi - lo
@@ -251,12 +257,10 @@ def pygui_ruler(label,lo,hi,maxticks=10,minor_cnt=4):
         return
     top=get_window_pos().y+wcursor.y                                    ## top of the bar (screen)
     left=get_window_pos().x+wcursor.x + style.frame_padding.x                          ## left of bar (screen)
-    rect=[left,top,left+width, top+height]                  ## slider rect (screen). larger than what' actually drawn on screen
+    #rect=[left,top,left+width, top+height]                  ## slider rect (screen). larger than what' actually drawn on screen
     draw_list = imgui.get_window_draw_list()
     for t in minor:
         x=left+width*pct2(t,lo,hi)
-        if t<0:
-            print()
         draw_list.add_line(*Vec2(x,top),*Vec2(x,top+height//3),textcolor)
     for t in major:
         x=left+width*pct2(t,lo,hi)
@@ -453,27 +457,30 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=N
     draw_list.add_rect_filled(*Vec2(centerhandle[0],centerhandle[1]+0),*Vec2(centerhandle[2],centerhandle[3]-0),handlecolor)
     if not active:
         return False,bounds
-    if imgui.is_item_active() and imgui.is_item_hovered() and imgui.is_mouse_dragging(0):
+    if (imgui.is_item_active()) and (imgui.is_item_hovered()) and (imgui.is_mouse_dragging(0)):
         dragwidth=max(centerhandle[2]-centerhandle[0],2*height//3)
         draghandle=[centerhandle[0]+dragwidth//4,top,centerhandle[2]-dragwidth//4,top+height]
+        #draw_list.add_rect_filled(*Vec2(draghandle[0],draghandle[1]+0),*Vec2(draghandle[2],draghandle[3]-0),handlecolor)
         if BUNDLEAPI:
-            if ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*lohandle):
-                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+            _old_mouse_pos=imgui.get_mouse_pos()-imgui.get_io().mouse_delta
+        else:
+            _old_mouse_pos=imgui.get_mouse_pos()+(-1*imgui.get_io().mouse_delta)
+        if ptinrect(*_old_mouse_pos,*lohandle):
+            delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+            bounds[0]=clip(bounds[0]+delta,v_min,bounds[1]-handle_span)
+            changed=True
+        elif ptinrect(*_old_mouse_pos,*hihandle):
+            delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+            bounds[1]=clip(bounds[1]+delta,bounds[0]+handle_span,v_max)
+            changed=True
+        elif ptinrect(*_old_mouse_pos,*draghandle):
+            delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+            if 0<=bounds[0]+delta<=v_max and 0<=bounds[1]+delta<=v_max:
                 bounds[0]=clip(bounds[0]+delta,v_min,bounds[1]-handle_span)
-                changed=True
-            elif ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*hihandle):
-                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
                 bounds[1]=clip(bounds[1]+delta,bounds[0]+handle_span,v_max)
                 changed=True
-            elif ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*draghandle):
-                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
-                if 0<=bounds[0]+delta<=v_max and 0<=bounds[1]+delta<=v_max:
-                    bounds[0]=clip(bounds[0]+delta,v_min,bounds[1]-handle_span)
-                    bounds[1]=clip(bounds[1]+delta,bounds[0]+handle_span,v_max)
-                    changed=True
-        else:
-            print(imgui.get_io().mouse_delta)
     '''
+    deprecated code
     if imgui.is_item_clicked():
         if ptinrect(*imgui.get_mouse_pos(),*lohandle):
             pygui_range_float2._current=0
@@ -510,7 +517,6 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=N
 def pygui_breadcrumb(p):
     for i,part in enumerate(p.parts):
         if imgui.button(part):
-            #print(str(pathlib.Path(*p.parts[:i+1])))
             return True,pathlib.Path(*p.parts[:i+1])
         if i!=len(p.parts)-1:
             imgui.same_line()
@@ -520,7 +526,6 @@ def pygui_breadcrumb(p):
 ## TODO: for all pygui_popup_xxx_selector
 ## + implement drive letter selection if on windows
 ## + implement combo for selecting filetype (*.mp4)
-##
 @static_vars(_path=None,_children=None,_invisible=False)
 def pygui_popup_file_open_selector(label,path,filterlist=['[!]*'],charwidth=55,rowcount=10):
     """Displays an file selection dialog
@@ -534,34 +539,34 @@ def pygui_popup_file_open_selector(label,path,filterlist=['[!]*'],charwidth=55,r
     Returns:
         the selected path of None if user cancelled.
     """
-    self=pygui_popup_file_open_selector ## should rename to _func
-    if self._path is None:
-        self._path=pathlib.Path(path)
-        self._item_current_idx=0
+    _func=pygui_popup_file_open_selector
+    if _func._path is None:
+        _func._path=pathlib.Path(path)
+        _func._item_current_idx=0
     
     if imgui.begin_popup_modal(label)[0]:
-        parent=self._path.parent if self._path.is_file() else self._path
+        parent=_func._path.parent if _func._path.is_file() else _func._path
         changed,newpath=pygui_breadcrumb(parent)
         if changed:
-            self._path=newpath
-            self._children=None
-            self._item_current_idx=0
+            _func._path=newpath
+            _func._children=None
+            _func._item_current_idx=0
             parent=newpath
-        changed,self._invisible=imgui.checkbox("Show hidden files"+" "*(charwidth-17),self._invisible)
+        changed,_func._invisible=imgui.checkbox("Show hidden files"+" "*(charwidth-17),_func._invisible)
         imgui.separator()
         ## construct list of files
-        if self._children is None or changed:
-            self._children=[]
+        if _func._children is None or changed:
+            _func._children=[]
             try:
-                self._children.extend([str(p.name) for p in parent.iterdir() if p.is_dir()])
+                _func._children.extend([str(p.name) for p in parent.iterdir() if p.is_dir()])
                 for f in filterlist:
-                    self._children.extend([str(p.name) for p in parent.glob(f) if p.is_file()])
-                if not self._invisible:
-                    self._children=[f for f in self._children if not str(f).startswith('.')]
+                    _func._children.extend([str(p.name) for p in parent.glob(f) if p.is_file()])
+                if not _func._invisible:
+                    _func._children=[f for f in _func._children if not str(f).startswith('.')]
             except:
                 ## permission error
                 pass
-            self._children=['..']+sorted(list(set(self._children)))
+            _func._children=['..']+sorted(list(set(_func._children)))
 
         ## display ui
         wsize=pygui_get_content_region_avail()              ## actual size of window content (after padding substraction)
@@ -570,24 +575,24 @@ def pygui_popup_file_open_selector(label,path,filterlist=['[!]*'],charwidth=55,r
         
         if BUNDLEAPI:
             if imgui.begin_list_box(f"##{label}",ImVec2(wsize.x-wcursor.x, max((rowcount-1)*height,wsize.y-wcursor.y-3*height))):
-                for i,f in enumerate(self._children):
-                    if imgui.selectable(f, self._item_current_idx == i)[0]:
-                        self._item_current_idx = i
-                        self._path=(parent/f).resolve()
-                        self._children=None
+                for i,f in enumerate(_func._children):
+                    if imgui.selectable(f, _func._item_current_idx == i)[0]:
+                        _func._item_current_idx = i
+                        _func._path=(parent/f).resolve()
+                        _func._children=None
                 imgui.end_list_box()
         else:
             with imgui.begin_list_box("", wsize.x-wcursor.x, max((rowcount-1)*height,wsize.y-wcursor.y-3*height)) as list_box:
                 if list_box.opened:
                     #imgui.listbox_header("",wsize.x-wcursor.x, max((rowcount-1)*height,wsize.y-wcursor.y-3*height))
-                    for i,f in enumerate(self._children):
+                    for i,f in enumerate(_func._children):
                         if imgui.selectable(f)[1]:
-                            self._path=(parent/f).resolve()
-                            self._children=None
+                            _func._path=(parent/f).resolve()
+                            _func._children=None
                     #imgui.listbox_footer()
         imgui.separator()
-        if not self._path.is_dir():
-            imgui.text(self._path.name)
+        if not _func._path.is_dir():
+            imgui.text(_func._path.name)
         else:
             imgui.text('')
         if imgui.button("Cancel"):
@@ -595,10 +600,10 @@ def pygui_popup_file_open_selector(label,path,filterlist=['[!]*'],charwidth=55,r
             imgui.end_popup()
             return None
         imgui.same_line()
-        if not self._path.is_dir() and imgui.button("Select"):
+        if not _func._path.is_dir() and imgui.button("Select"):
             imgui.close_current_popup()
             imgui.end_popup()
-            return str(self._path)
+            return str(_func._path)
         imgui.end_popup()
         return None
 
@@ -817,14 +822,6 @@ def pygui_image_clickable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     Returns:
         tuple (changed, (x,y)) coordinates are relative to width and height (0-1.0 bound)
     """
-    # width=width if width else pygui_get_content_region_avail()[0]
-    # pygui_image(texid, width, width*ar, uv0=(0,0),uv1=(1,1))
-    # lt=imgui.get_item_rect_min()
-    # rb=imgui.get_item_rect_max()
-    # xy=imgui.get_mouse_pos()
-    # if pygui_is_window_focused() and click(0,*lt,*rb):
-    #     return True,pct4(*xy,*lt,*rb)
-    # return False,(None,None)
     width,height=pygui_get_content_region_avail()
     w_max=w_max if w_max else width
     h_max=h_max if h_max else height
@@ -849,6 +846,67 @@ def pygui_image_clickable(texid,ar=1.0,center=True, w_max=None, h_max=None):
         return True,pct4(*imgui.get_mouse_pos(),*lt,*rb)
     return False,(None,None)
 
+def pygui_image_polygon(texid,polygon,maxpts=4,ar=1.0,center=True,
+                        color=[1.,0.,0.,1.], fillcolor=[0.,0.,0.,0.],thickness=2.0,
+                        w_max=None, h_max=None):
+    """Displays image with specific aspect ratio and records mouse clicks while displaying polygon.
+
+    Args:
+        texid: id of texture
+        polygon: current polygon points
+        maxpts: the maximum number of points
+        ar: aspect ratio for image
+        center: center the image horizontally (0b01) and/or vertically (0b10)
+        color, fillcolor, thickness: properties of polygon
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.
+    Returns:
+        tuple (changed, polygon) coordinates are relative to width and height (0-1.0 bound)
+    """
+    width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
+    if height/width>ar:
+        height=width*ar
+    else:
+        width=height/ar
+    ox,oy=imgui.get_cursor_pos()
+    if center & 0b01:
+        ox+=(pygui_get_content_region_avail().x-width) * 0.5
+    if center &0b10:
+        oy+=(pygui_get_content_region_avail().y-height) * 0.5
+    imgui.set_cursor_pos((ox,oy))
+    pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
+    imgui.set_cursor_pos((ox,oy))
+    imgui.invisible_button(f"img_clic_{texid}",*Vec2(width,height))
+    lt=imgui.get_item_rect_min()
+    rb=imgui.get_item_rect_max()
+    draw_list = imgui.get_window_draw_list()
+    if BUNDLEAPI:
+        _col=imgui.get_color_u32(imgui.ImVec4(*color))
+        _fcol=imgui.get_color_u32(imgui.ImVec4(*fillcolor))
+    else:
+        _col=imgui.get_color_u32_rgba(*color) ## not tested
+        _fcol=imgui.get_color_u32_rgba(*fillcolor)
+    polygon_=[pixels4(*pt,*lt,*rb) for pt in polygon] ## convert to screen
+    for x,y in polygon_:
+        draw_list.add_circle_filled(*Vec2(x,y),3,_col)
+    if len(polygon_)>1:
+        for p1,p2 in itertools.pairwise(polygon_):
+            draw_list.add_line(*Vec2(*p1),*Vec2(*p2),_col,thickness=thickness)
+        draw_list.add_line(*Vec2(*polygon_[-1]),*Vec2(*polygon_[0]),
+                           _fcol if len(polygon_)<maxpts else _col,
+                           thickness=thickness)
+        if BUNDLEAPI: ## not implemented in pyimgui
+            draw_list.add_concave_poly_filled([imgui.ImVec2(x,y) for x,y in polygon_],_fcol)
+    if pygui_is_window_focused() and click(0,*lt,*rb):
+        if len(polygon)==maxpts:
+            polygon=[]
+        polygon.append(pct4(*imgui.get_mouse_pos(),*lt,*rb))
+        return True,polygon
+    return False,polygon
+
 def pygui_image_expandable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     """Displays image with specific aspect ratio and optionnaly centered in window.
 
@@ -856,7 +914,8 @@ def pygui_image_expandable(texid,ar=1.0,center=True, w_max=None, h_max=None):
         texid: id of texture
         ar: aspect ratio for image
         center: center the image horizontally (0b01) and/or vertically (0b10)
-        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.     Returns:
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.     
+    Returns:
         None
     """
     width,height=pygui_get_content_region_avail()
@@ -939,7 +998,7 @@ def pygui_image_dragable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     return False,(0,0,0)
 
 @static_vars(_dragging=False)
-def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,1.0],rounding=0.0, thickness=2.0, w_max=None, h_max=None):
+def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,1.0],fillcolor=[0.,0.,0.,0.],rounding=0.0, thickness=2.0, w_max=None, h_max=None):
     """Displays image where user can select a rectangular ROI with mouse.
 
     Args:
@@ -948,7 +1007,7 @@ def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,
         ar: aspect ratio for image
         center: center the image horizontally (0b01) and/or vertically (0b10)
         roi_ar: forced aspect ratio for roi selection
-        color, rounding, thickness: color, corner rounding and line thickness for the selection rect
+        color, fillcolor, rounding, thickness: color, fill color, corner rounding and line thickness for the selection rect
         w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.    
     Returns:
         tuple(changed,(l,t,r,b))
@@ -1009,6 +1068,7 @@ def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,
     if imgui.is_mouse_released(0) and pygui_image_roi._dragging:#and ptinrect(*xy,*lt,*rb):
         ## because pt in rect returns false if mouse is outside the image, we will never reach 1.0 nor 0.0
         ## I prefer using static var to check if we were dragging, to allow selection of full image and avoid bugs when mouse is released outside the image
+        ## another solution could be to expand rect by 1~2 pixels
         pygui_image_roi._dragging=False
         return True, (l,t,r,b)
     l_,t_=pixels4(l,t,lt.x,lt.y,rb.x,rb.y)
@@ -1016,11 +1076,112 @@ def pygui_image_roi(texid,roi,ar=1.0,center=True,roi_ar=None,color=[1.0,0.0,0.0,
 
     if BUNDLEAPI:
         _col=imgui.get_color_u32(imgui.ImVec4(*color))
+        _fcol=imgui.get_color_u32(imgui.ImVec4(*fillcolor))
     else:
         _col=imgui.get_color_u32_rgba(*color) ## not tested
+        _fcol=imgui.get_color_u32_rgba(*fillcolor)
     if r_!=l_ and t_!=b_:
+        draw_list.add_rect_filled(*Vec2(l_,t_),*Vec2(r_,b_),
+                           _fcol,rounding=rounding)
         draw_list.add_rect(*Vec2(l_,t_),*Vec2(r_,b_),
                            _col,rounding=rounding,thickness=thickness)
+    return False,(l,t,r,b)
+
+def pygui_image_crop(texid,crop,ar=1.0,center=True,color=[1.0,0.0,0.0,1.0],fillcolor=[0.,0.,0.,0.],thickness=2.0, w_max=None, h_max=None):
+    """Displays image where user can select a rectangular region with mouse.
+
+    Args:
+        texid: id of texture
+        crop: current value of crop region (abc.collections with length 4), in % of image width and height
+        ar: aspect ratio for image
+        center: center the image horizontally (0b01) and/or vertically (0b10)
+        color, fillcolor, thickness: color, fill color and line thickness for cursors and area outside the selection rect.
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.    
+    Returns:
+        tuple(changed,(l,t,r,b))
+
+    notes (1): the crop region is always changed whenever mous is pressed but changed is only set when mouse is released
+    the correct way to use this is therefore:
+        ## in init
+        _crop_buffer=(0.0,0.0,0.0,0.0)
+        ## in render loop
+        imgui.begin_frame()
+        changed,_crop_buffer=pygui.image_crop(id, _crop_buffer)
+        if changed:
+            self.actual_crop=tuple(_crop_buffer)
+        imgui.end_frame()
+    """
+    def pixels4(x,y,l,t,r,b): ## equivalent to pct4
+        return([round(l+x*(r-l)),round(t+y*(b-t))])
+    
+    width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
+    if height/width>ar:
+        height=width*ar
+    else:
+        width=height/ar
+    ox,oy=imgui.get_cursor_pos()
+    if center & 0b01:
+        ox+=(pygui_get_content_region_avail().x-width) * 0.5
+    if center &0b10:
+        oy+=(pygui_get_content_region_avail().y-height) * 0.5
+    imgui.set_cursor_pos((ox,oy))
+    pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
+    imgui.set_cursor_pos((ox,oy))
+    imgui.invisible_button("pygui_crop_selector",*Vec2(width,height))
+    draw_list = imgui.get_window_draw_list()
+    l,t,r,b=crop
+    lt=imgui.get_item_rect_min()
+    rb=imgui.get_item_rect_max()
+    l_,t_=pixels4(l,t,lt.x,lt.y,rb.x,rb.y) ## crop in pixels
+    r_,b_=pixels4(r,b,lt.x,lt.y,rb.x,rb.y) ## crop in pixels
+    if BUNDLEAPI:
+        _col=imgui.get_color_u32(imgui.ImVec4(*color))
+        _fcol=imgui.get_color_u32(imgui.ImVec4(*fillcolor))
+    else:
+        _col=imgui.get_color_u32_rgba(*color) ## not tested
+        _fcol=imgui.get_color_u32_rgba(*fillcolor) ## not tested
+    draw_list.add_line(*Vec2(l_,lt.y),*Vec2(l_,rb.y),_col,thickness)
+    draw_list.add_line(*Vec2(r_,lt.y),*Vec2(r_,rb.y),_col,thickness)
+    draw_list.add_line(*Vec2(lt.x,t_),*Vec2(rb.x,t_),_col,thickness)
+    draw_list.add_line(*Vec2(lt.x,b_),*Vec2(rb.x,b_),_col,thickness)
+    # for crop, better draw rects outside crop region?
+    draw_list.add_rect_filled(*Vec2(lt.x,lt.y),*Vec2(rb.x,t_),_fcol)
+    draw_list.add_rect_filled(*Vec2(lt.x,t_),*Vec2(l_,b_),_fcol)
+    draw_list.add_rect_filled(*Vec2(lt.x,b_),*Vec2(rb.x,rb.y),_fcol)
+    draw_list.add_rect_filled(*Vec2(r_,t_),*Vec2(rb.x,b_),_fcol)
+
+    def _pygui_dragable_rect(l,t,r,b):
+        x,y=imgui.get_mouse_pos()
+        dx,dy=imgui.get_io().mouse_delta
+        #draw_list.add_rect(*Vec2(l,t),*Vec2(r,b),_col)
+        if imgui.is_item_active() and imgui.is_mouse_down(0) and (dx or dy) and ptinrect(x-dx,y-dy,l,t,r,b):
+            if dx or dy:
+                return True, (l+dx,t+dy,r+dx,b+dy)
+        return False,(l,t,r,b)
+    ## vertical cursors
+    changed,rect=_pygui_dragable_rect(l_-3,lt.y,l_+3,rb.y)
+    if changed:
+        l=clip(pct2((rect[0]+rect[2])/2,lt.x,rb.x),0,1.0)
+        return False,(min(l,r),min(t,b),max(l,r),max(t,b))
+    changed,rect=_pygui_dragable_rect(r_-3,lt.y,r_+3,rb.y)
+    if changed:
+        r=clip(pct2((rect[0]+rect[2])/2,lt.x,rb.x),0,1.0)
+        return False,(min(l,r),min(t,b),max(l,r),max(t,b))
+    # horizontal cursors
+    changed,rect=_pygui_dragable_rect(lt.x,t_-3,rb.x,t_+3)
+    if changed:
+        t=clip(pct2((rect[1]+rect[3])/2,lt.y,rb.y),0,1.0)
+        return False,(min(l,r),min(t,b),max(l,r),max(t,b))
+    changed,rect=_pygui_dragable_rect(lt.x,b_-3,rb.x,b_+3)
+    if changed:
+        b=clip(pct2((rect[1]+rect[3])/2,lt.y,rb.y),0,1.0)
+        return False,(min(l,r),min(t,b),max(l,r),max(t,b))
+    if imgui.is_mouse_released(0) and ptinrect(*imgui.get_mouse_pos(),*lt,*rb):
+        return True, (min(l,r),min(t,b),max(l,r),max(t,b))
     return False,(l,t,r,b)
 
 def pygui_knob_float(label:str,angle:float,amin:float|None=None,amax:float|None=None)->tuple[bool,float]:

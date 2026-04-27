@@ -1,7 +1,7 @@
 import os, pathlib
 ## force using either bundle api or classig imgui api
 os.environ["IMGUI_IMPL"]="imgui-classic"
-#os.environ["IMGUI_IMPL"]="imgui-bundle"
+os.environ["IMGUI_IMPL"]="imgui-bundle"
 
 import pygui
 import moderngl_window as mglw
@@ -54,6 +54,8 @@ class WindowEvents(mglw.WindowConfig):
         self.fspath_f=pathlib.Path(__file__).parent.resolve()/"test.png"
         self.fspath_d=pathlib.Path(os.getcwd())
         self.roi=(0,0,0,0)
+        self.crop_region=(0.25,0.25,0.75,0.75)
+        self.polygon=[]
         self.circles=False
         self.ruler=True
         self.colored_ranges=[[0,200],[0,200],[0,200],[0,200],[0,200]]
@@ -73,14 +75,30 @@ class WindowEvents(mglw.WindowConfig):
         ## UI BUILDING
         imgui.new_frame()
         ## hack for imgui.get_io() incorrect values
-        #imgui.get_io().key_shift=self._io_state['key_shift']
-        #imgui.get_io().key_ctrl=self._io_state['key_ctrl']
-        #imgui.get_io().mouse_delta=imgui.ImVec2(*self._io_state['mouse_delta'])
+        imgui.get_io().key_shift=self._io_state['key_shift']
+        imgui.get_io().key_ctrl=self._io_state['key_ctrl'] 
         ## end hack
         changed=False
+
+        ##
+        ## image related functions
+        ##
         imgui.begin("Test image")
         if imgui.begin_tab_bar("Images"):
             ar=self.img.width/self.img.height
+            if imgui.begin_tab_item("poly")[0]:
+                changed,self.polygon=pygui.image_polygon(ImTextureRef(self.img.glo),self.polygon,maxpts=5,
+                                                        color=[1.0,0.,0.,1.0],fillcolor=[1.0,0.,0.,0.4],
+                                                    ar=ar,thickness=2.0)
+                if changed:
+                    print("Polygon",self.polygon)
+                imgui.end_tab_item()
+            if imgui.begin_tab_item("cop")[0]:
+                changed,self.crop_region=pygui.image_crop(ImTextureRef(self.img.glo),self.crop_region,
+                                                    ar=ar,thickness=2.0)
+                if changed:
+                    print("Crop",self.crop_region)
+                imgui.end_tab_item()
             if imgui.begin_tab_item("roi")[0]:
                 changed,self.roi=pygui.image_roi(ImTextureRef(self.img.glo),self.roi,
                                                     ar=ar,roi_ar=None,thickness=2.0)
@@ -103,7 +121,9 @@ class WindowEvents(mglw.WindowConfig):
             imgui.end_tab_bar()
         imgui.end()
 
-
+        ##
+        ## controls
+        ##
         imgui.begin("Test_controls")
         f=pygui.file_select_button("Select file...",self.fspath_f);
         if f: print(f)
@@ -127,6 +147,9 @@ class WindowEvents(mglw.WindowConfig):
         imgui.end()
 
 
+        ##
+        ## timeline and range selection
+        ##
         if BUNDLEAPI:
             imgui.begin(f"Test time_line(s)",flags=imgui.WindowFlags_.no_scrollbar|imgui.WindowFlags_.no_collapse)
         else:
@@ -139,7 +162,6 @@ class WindowEvents(mglw.WindowConfig):
         imgui.push_id("range_id")
         self.range=pygui.range_float2("",self.range,0,200,circles=self.circles)[1]
         imgui.pop_id()
-        imgui.push_id("timeline_id") ## YLF
         ## no alignment - not working for keyframes
         imgui.text("No alignment - no keyframe support")
         if self.ruler:
@@ -180,20 +202,29 @@ class WindowEvents(mglw.WindowConfig):
             print(self.pos_fract)
         changed,self.range=pygui.pan_and_zoom(self.range,factor=fractions.Fraction(4,3),bounds=(0,200),pan=self._io_state['key_shift'])
         
+        ## stacked range selectors
         imgui.new_line()
         imgui.new_line()
         pygui.ruler("dummy_ruler",0,200)
         imgui.set_cursor_pos_y(imgui.get_cursor_pos()[1]+40)
-        for e, color in enumerate([[255,0,0,255],[0,255,0,255],[0,0,255,255],[255,255,0,255],[255,0,255,255]]):    
+        for e in range(len(self.colored_ranges)):    
             imgui.set_cursor_pos_y(imgui.get_cursor_pos()[1]-8)
             imgui.push_id(f"range{e}")
+            if BUNDLEAPI:
+                col_=imgui.ImColor.hsv(e/len(self.colored_ranges),0.6,0.6)
+            else:
+                col_=imgui.color_convert_hsv_to_rgb(e/len(self.colored_ranges),0.6,0.6)
             changed, self.colored_ranges[e] = pygui.range_float2(f"range{e}",self.colored_ranges[e],0,200,
-                                                                 circles=self.circles, color=color, height_px=6,
-                                                                 active=self.colored_ranges_enabled[e])
+                                                                  circles=self.circles, 
+                                                                  color=(col_[0],col_[1],col_[2],1.0),
+                                                                  height_px=6,
+                                                                  active=True or self.colored_ranges_enabled[e])
             if imgui.is_item_clicked():
                 self.colored_ranges_enabled=[_==e for _ in range(len(self.colored_ranges_enabled))]
             imgui.pop_id()
-        imgui.pop_id()
+        imgui.end()
+        imgui.begin("Info")
+        imgui.checkbox("Using Bundle API",BUNDLEAPI)
         imgui.end()
         # if BUNDLEAPI:
         #     imgui.show_demo_window()

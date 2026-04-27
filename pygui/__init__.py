@@ -10,6 +10,8 @@ from .pygui import (
     pygui_image_dragable as image_dragable,
     pygui_image_expandable as image_expandable,
     pygui_image_roi as image_roi,
+    pygui_image_crop as image_crop,
+    pygui_image_polygon as image_polygon,
     pygui_popup_file_open_selector as popup_file_selector,
     pygui_popup_file_save_selector as popup_save_as_selector,
     pygui_popup_dir_open_selector as popup_dir_selector,
