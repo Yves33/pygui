@@ -8,7 +8,8 @@ __Image related widgets__:
 + pygui.image_clickable: returns (x,y,w) tuple representing the relative position of mouse clicks occuring in an image (x,y in range[0.0,1.0], w=1,-1).
 + pygui.image_draggable: returns the amount of drag that has occured within an image since last time.
 + pygui.image_roi: enables the selection of rectangular region of interest (roi) on an image.
-+ pygui.image_crop: enables the selection of crop region through 4 lines
++ pygui.image_crop: enables the selection of crop region through 4 lines.
++ pygui.image_polygon: enables the selection of n pointspolygons.
 
 __Controls__:
 + pygui.knob_float: a knob control that can loop over full circle. Usefull for angle inputs.  
@@ -18,14 +19,14 @@ __Controls__:
 + pygui.pan_and_zoom: utility func to interact with pygui.time_line.
 
 __FileDialogs__:
-+ pygui.file_open_dialog
-+ pygui.file_save_dialog
-+ pygui.dir_open_dialog  
-+ 
++ pygui.file_open_dialog.
++ pygui.file_save_dialog.
++ pygui.dir_open_dialog.  
+
 and their single button counter_parts
-+ pygui.file_open_button
-+ pygui.file_save_button
-+ pygui.dir_open_button
++ pygui.file_open_button.
++ pygui.file_save_button.
++ pygui.dir_open_button.
 
 
 ## 2 - Why ?
