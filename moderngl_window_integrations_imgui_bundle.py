@@ -271,8 +271,10 @@ class ModernGLRenderer:
 
                 x, y, z, w = command.clip_rect
                 self.ctx.scissor = int(x), int(fb_height - w), int(z - x), int(w - y)
-                self._vao.render(moderngl.TRIANGLES, vertices=command.elem_count, first=idx_pos)
-                idx_pos += command.elem_count
+                self._vao.render(moderngl.TRIANGLES, vertices=command.elem_count, first=idx_pos+command.idx_offset)
+                ## old render loop
+                #self._vao.render(moderngl.TRIANGLES, vertices=command.elem_count, first=idx_pos)
+                #idx_pos += command.elem_count
 
         self.ctx.scissor = None
 

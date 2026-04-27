@@ -1,3 +1,8 @@
+[2026-04-26]
+Fixed push_id/pop_id issue in test for colored range sliders
+Fixed text input flages for file_save_selector
+(extra!) Fixed issue in moderngl_window_renderer (render loop updated to imgui>1.86)
+
 [2026-04-25] 
 Added w_max and h_max parameters to image_* functions to constain the maximum size of the image.
 Set default value of circles (True) for pygui.time_line and pygui.range_float2.

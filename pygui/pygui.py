@@ -651,7 +651,8 @@ def pygui_popup_file_save_selector(label,path,filterlist=['[!]*'],charwidth=55,r
                                 self._newname=f
                     #imgui.listbox_footer()
         imgui.separator()
-        changed,self._newname=imgui.input_text("Filename",self._newname,255)
+        changed,self._newname=imgui.input_text("Filename",self._newname,
+                                               imgui.InputTextFlags_.enter_returns_true if BUNDLEAPI else imgui.INPUT_TEXT_ENTER_RETURNS_TRUE)
         if imgui.button("Cancel"):
             self._newname="Untitled.abc"
             imgui.close_current_popup()

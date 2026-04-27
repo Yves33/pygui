@@ -1,8 +1,8 @@
 
 import os, pathlib
 ## force using either bundle api or classig imgui api
-os.environ["IMGUI_IMPL"]="imgui-classic"
-#os.environ["IMGUI_IMPL"]="imgui-bundle"
+#os.environ["IMGUI_IMPL"]="imgui-classic"
+os.environ["IMGUI_IMPL"]="imgui-bundle"
 
 import pygui
 import moderngl_window as mglw
@@ -188,9 +188,11 @@ class WindowEvents(mglw.WindowConfig):
         imgui.push_id("colored_ranges_id")
         for e, color in enumerate([[255,0,0,255],[0,255,0,255],[0,0,255,255],[255,255,0,255],[255,0,255,255]]):    
             imgui.set_cursor_pos_y(imgui.get_cursor_pos()[1]-8)
+            imgui.push_id(f"range{e}")
             changed, self.colored_ranges[e] = pygui.range_float2(f"range{e}",self.colored_ranges[e],0,200,
                                                                  circles=self.circles, color=color, height_px=6,
                                                                  active=self.colored_ranges_enabled[e])
+            imgui.pop_id()
             if imgui.is_item_clicked():
                 self.colored_ranges_enabled=[_==e for _ in range(len(self.colored_ranges_enabled))]
         imgui.pop_id()
