@@ -386,7 +386,7 @@ def pygui_time_line(label,pos,keyframes,lo,hi,height_px=6,rightbtn=2, align=0,ci
             draw_list.add_circle(*Vec2(x,y),radius,handlecolor,num_segments=16 if circles else 4)
     return changed,pos
 
-@static_vars(_current=None, _drag=None)
+#@static_vars(_current=None, _drag=None)
 def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=None,active=True):
     """Displays a range widget
 
@@ -453,6 +453,27 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=N
     draw_list.add_rect_filled(*Vec2(centerhandle[0],centerhandle[1]+0),*Vec2(centerhandle[2],centerhandle[3]-0),handlecolor)
     if not active:
         return False,bounds
+    if imgui.is_item_active() and imgui.is_item_hovered() and imgui.is_mouse_dragging(0):
+        dragwidth=max(centerhandle[2]-centerhandle[0],2*height//3)
+        draghandle=[centerhandle[0]+dragwidth//4,top,centerhandle[2]-dragwidth//4,top+height]
+        if BUNDLEAPI:
+            if ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*lohandle):
+                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+                bounds[0]=clip(bounds[0]+delta,v_min,bounds[1]-handle_span)
+                changed=True
+            elif ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*hihandle):
+                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+                bounds[1]=clip(bounds[1]+delta,bounds[0]+handle_span,v_max)
+                changed=True
+            elif ptinrect(*(imgui.get_mouse_pos()-imgui.get_io().mouse_delta),*draghandle):
+                delta=imgui.get_io().mouse_delta.x/width*(v_max-v_min)
+                if 0<=bounds[0]+delta<=v_max and 0<=bounds[1]+delta<=v_max:
+                    bounds[0]=clip(bounds[0]+delta,v_min,bounds[1]-handle_span)
+                    bounds[1]=clip(bounds[1]+delta,bounds[0]+handle_span,v_max)
+                    changed=True
+        else:
+            print(imgui.get_io().mouse_delta)
+    '''
     if imgui.is_item_clicked():
         if ptinrect(*imgui.get_mouse_pos(),*lohandle):
             pygui_range_float2._current=0
@@ -482,7 +503,7 @@ def pygui_range_float2(label,bounds,v_min,v_max,height_px=6,circles=True,color=N
                 p=v_min+round(pct*(v_max-v_min))
                 if 0<=p-pygui_range_float2._drag[0]<=v_max and 0<=p-pygui_range_float2._drag[1]<=v_max:
                     bounds=[p-pygui_range_float2._drag[0],p-pygui_range_float2._drag[1]]
-                    changed=True
+                    changed=True'''
     bounds.sort()        
     return changed,(clip(bounds[0],v_min,v_max),clip(bounds[1],v_min,v_max))
 
