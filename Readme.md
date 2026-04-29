@@ -19,14 +19,14 @@ __Controls__:
 + pygui.pan_and_zoom: utility func to interact with pygui.time_line.
 
 __FileDialogs__:
-+ pygui.file_open_dialog.
-+ pygui.file_save_dialog.
-+ pygui.dir_open_dialog.  
++ pygui.popup_file_open_selector.
++ pygui.popup_file_save_as_selector.
++ pygui.popup_dir_open_selector.  
 
 and their single button counter_parts
-+ pygui.file_open_button.
-+ pygui.file_save_button.
-+ pygui.dir_open_button.
++ pygui.file_select_button.
++ pygui.file_save_as_button.
++ pygui.dir_select_button.
 
 
 ## 2 - Why ?
