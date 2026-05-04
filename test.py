@@ -93,7 +93,7 @@ class WindowEvents(mglw.WindowConfig):
                 if changed:
                     print("Polygon",self.polygon)
                 imgui.end_tab_item()
-            if imgui.begin_tab_item("cop")[0]:
+            if imgui.begin_tab_item("crop")[0]:
                 changed,self.crop_region=pygui.image_crop(ImTextureRef(self.img.glo),self.crop_region,
                                                     ar=ar,thickness=2.0)
                 if changed:

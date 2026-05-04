@@ -971,14 +971,15 @@ def pygui_image_dragable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     rb=imgui.get_item_rect_max()
 
     ## simple version, but io.mouse_delta is always 0!
-    xm,ym=imgui.get_mouse_pos()
-    if lt[0]<xm<rb[0] and lt[1]<ym<rb[1]:
-        io=imgui.get_io()
-        if io.mouse_wheel:
-            return (True,(0,0,io.mouse_wheel))
-        elif imgui.is_mouse_down(0) and imgui.is_mouse_dragging(0):
-            if io.mouse_delta.x!=0 or io.mouse_delta.y!=0:
-                return True,(imgui.get_io().mouse_delta.x,imgui.get_io().mouse_delta.y,0)
+    if imgui.is_item_active():
+        xm,ym=imgui.get_mouse_pos()
+        if lt[0]<xm<rb[0] and lt[1]<ym<rb[1]:
+            io=imgui.get_io()
+            if io.mouse_wheel:
+                return (True,(0,0,io.mouse_wheel))
+            elif imgui.is_mouse_down(0) and imgui.is_mouse_dragging(0):
+                if io.mouse_delta.x!=0 or io.mouse_delta.y!=0:
+                    return True,(imgui.get_io().mouse_delta.x,imgui.get_io().mouse_delta.y,0)
     return False,(0,0,0)
 
     xm,ym=imgui.get_mouse_pos()
