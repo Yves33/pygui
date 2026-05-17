@@ -846,6 +846,58 @@ def pygui_image_clickable(texid,ar=1.0,center=True, w_max=None, h_max=None):
         return True,pct4(*imgui.get_mouse_pos(),*lt,*rb)
     return False,(None,None)
 
+def pygui_image_zoomable(texid,zoom_region,ar=1.0,center=True, w_max=None, h_max=None):
+    """Displays image with specific aspect ratio and allows zooming.
+
+    Args:
+        texid: id of texture
+        ar: aspect ratio for image
+        center: center the image horizontally (0b01) and/or vertically (0b10)
+        w_max, h_max: if specified, the image will not expand beyond these dimensions even if there is more space available.
+    Returns:
+        tuple (changed, (l,t,r,b)) current zoom region relative to width and height (0-1.0 bound)
+    """
+    width,height=pygui_get_content_region_avail()
+    w_max=w_max if w_max else width
+    h_max=h_max if h_max else height
+    width=min(width,w_max)
+    height=min(height,h_max)
+    if height/width>ar:
+        height=width*ar
+    else:
+        width=height/ar
+    ox,oy=imgui.get_cursor_pos()
+    if center & 0b01:
+        ox+=(pygui_get_content_region_avail().x-width) * 0.5
+    if center &0b10:
+        oy+=(pygui_get_content_region_avail().y-height) * 0.5
+    imgui.set_cursor_pos((ox,oy))
+    pygui_image(texid,width,height,uv0=(zoom_region[0],zoom_region[1]),uv1=(zoom_region[2],zoom_region[3]))
+    imgui.set_cursor_pos((ox,oy))
+    imgui.invisible_button(f"img_clic_{texid}",*Vec2(width,height))
+    lt=imgui.get_item_rect_min()
+    rb=imgui.get_item_rect_max()
+    wpct=zoom_region[2]-zoom_region[0]
+    hpct=zoom_region[3]-zoom_region[1]
+    if pygui_is_window_focused():
+        io=imgui.get_io()
+        if io.mouse_wheel:
+            x,y=pct4(*imgui.get_mouse_pos(),*lt,*rb)
+            x=x*wpct+zoom_region[0]
+            y=y*hpct+zoom_region[1]
+            if io.mouse_wheel>0:
+                l=max(0,zoom_region[0]-(x-zoom_region[0])*0.1)
+                t=max(0,zoom_region[1]-(y-zoom_region[1])*0.1)
+                r=min(1,zoom_region[2]+(zoom_region[2]-x)*0.1)
+                b=min(1,zoom_region[3]+(zoom_region[3]-y)*0.1)
+            elif io.mouse_wheel<0:
+                l=min(zoom_region[0]+(x-zoom_region[0])*0.1,zoom_region[2]-0.01)
+                t=min(zoom_region[1]+(y-zoom_region[1])*0.1,zoom_region[3]-0.01)
+                r=max(zoom_region[2]-(zoom_region[2]-x)*0.1,zoom_region[0]+0.01)
+                b=max(zoom_region[3]-(zoom_region[3]-y)*0.1,zoom_region[1]+0.01)
+            return True,(l,t,r,b)
+    return False,zoom_region
+
 def pygui_image_polygon(texid,polygon,maxpts=4,ar=1.0,center=True,
                         color=[1.,0.,0.,1.], fillcolor=[0.,0.,0.,0.],thickness=2.0,
                         w_max=None, h_max=None):
@@ -966,7 +1018,7 @@ def pygui_image_dragable(texid,ar=1.0,center=True, w_max=None, h_max=None):
     imgui.set_cursor_pos((ox,oy))
     pygui_image(texid,width,height,uv0=(0,0),uv1=(1,1))
     imgui.set_cursor_pos((ox,oy))
-    imgui.invisible_button(f"img_drag_{texid}",*Vec2(width,height))
+    imgui.invisible_button(f"img_draggable",*Vec2(width,height))
     lt=imgui.get_item_rect_min()
     rb=imgui.get_item_rect_max()
 
@@ -978,11 +1030,10 @@ def pygui_image_dragable(texid,ar=1.0,center=True, w_max=None, h_max=None):
             #io=imgui.get_io()
             if io.mouse_wheel:
                 return (True,(0,0,io.mouse_wheel))
-            elif imgui.is_mouse_down(0) and imgui.is_mouse_dragging(0):
+            elif imgui.is_mouse_down(0):# and imgui.is_mouse_dragging(0):
                 if io.mouse_delta.x!=0 or io.mouse_delta.y!=0:
-                    return True,(imgui.get_io().mouse_delta.x,imgui.get_io().mouse_delta.y,0)
+                    return True,(io.mouse_delta.x,io.mouse_delta.y,0)
     return False,(0,0,0)
-
     xm,ym=imgui.get_mouse_pos()
     if lt[0]<xm<rb[0] and lt[1]<ym<rb[1] and imgui.get_io().mouse_wheel:
         return (True,(0,0,imgui.get_io().mouse_wheel))

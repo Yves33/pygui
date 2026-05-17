@@ -1,6 +1,6 @@
 import os, pathlib
 ## force using either bundle api or classig imgui api
-os.environ["IMGUI_IMPL"]="imgui-classic"
+#os.environ["IMGUI_IMPL"]="imgui-classic"
 os.environ["IMGUI_IMPL"]="imgui-bundle"
 
 import pygui
@@ -34,7 +34,7 @@ class WindowEvents(mglw.WindowConfig):
         imgui.create_context()
         self.wnd.ctx.error
         self.impl = ModernglWindowRenderer(self.wnd)
-        self.img=self.load_texture_2d("./chess.png", flip_y=False)
+        self.img=self.load_texture_2d("./test.png", flip_y=False)
         self.impl.register_texture(self.img)
 
         ## initialize useful variables
@@ -55,6 +55,7 @@ class WindowEvents(mglw.WindowConfig):
         self.fspath_d=pathlib.Path(os.getcwd())
         self.roi=(0,0,0,0)
         self.crop_region=(0.25,0.25,0.75,0.75)
+        self.zoom_region=(0.,0.,1.,1.)
         self.polygon=[]
         self.circles=False
         self.ruler=True
@@ -85,7 +86,13 @@ class WindowEvents(mglw.WindowConfig):
         ##
         imgui.begin("Test image")
         if imgui.begin_tab_bar("Images"):
-            ar=self.img.width/self.img.height
+            ar=self.img.height/self.img.width
+            if imgui.begin_tab_item("Panzoom")[0]:
+                changed,self.zoom_region=pygui.image_zoomable(ImTextureRef(self.img.glo),self.zoom_region,
+                                                    ar=ar)
+                if changed:
+                    pass
+                imgui.end_tab_item()
             if imgui.begin_tab_item("poly")[0]:
                 changed,self.polygon=pygui.image_polygon(ImTextureRef(self.img.glo),self.polygon,maxpts=5,
                                                         color=[1.0,0.,0.,1.0],fillcolor=[1.0,0.,0.,0.4],
@@ -247,8 +254,6 @@ class WindowEvents(mglw.WindowConfig):
 
     def on_mouse_position_event(self, x, y, dx, dy):
         self.impl.mouse_position_event(x, y, dx, dy)
-        ## seems some events are ignored by imgui!
-        self._io_state['mouse_delta']=(dx,dy)
 
     def on_mouse_drag_event(self, x, y, dx, dy):
         self.impl.mouse_drag_event(x, y, dx, dy)
