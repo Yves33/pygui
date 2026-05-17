@@ -9,6 +9,7 @@ from .pygui import (
     pygui_image_clickable as image_clickable,
     pygui_image_dragable as image_dragable,
     pygui_image_expandable as image_expandable,
+    pygui_image_zoomable as image_zoomable,
     pygui_image_roi as image_roi,
     pygui_image_crop as image_crop,
     pygui_image_polygon as image_polygon,
