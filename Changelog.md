@@ -1,3 +1,6 @@
+[2026-05-16]
++ Added pygui.image_zoomable to quickly zoom on picture with mouse wheel
+
 [2026-04-27]
 + Added `pygui.image_crop` for crop region selection (4 cursor image region selection) 
 + Added `pygui.image_polygon` for n points region selection.
